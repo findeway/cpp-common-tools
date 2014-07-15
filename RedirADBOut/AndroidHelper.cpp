@@ -7,11 +7,18 @@
 
 #pragma comment(lib,"setupapi")
 
-const wchar_t* CMD_GET_BRAND = L"adb.exe -d shell getprop ro.product.brand"; 			//获取厂商名称
-const wchar_t* CMD_GET_MODEL = L"adb.exe -d shell getprop ro.product.model";				//设备型号
-const wchar_t* CMD_GET_VERSION = L"adb.exe -d shell getprop ro.build.version.release";	//android版本
-const wchar_t* CMD_GET_IMEI = L"adb.exe -d shell dumpsys iphonesubinfo";					//IMEI码
+const wchar_t* CMD_GET_BRAND = L"adb.exe -d shell getprop ro.product.brand";
+const wchar_t* CMD_GET_MODEL = L"adb.exe -d shell getprop ro.product.model";
+const wchar_t* CMD_GET_VERSION = L"adb.exe -d shell getprop ro.build.version.release";
+const wchar_t* CMD_GET_IMEI = L"adb.exe -d shell dumpsys iphonesubinfo";
 const wchar_t* CMD_GET_MAC = L"adb.exe -d shell cat /sys/class/net/wlan0/address";
+const wchar_t* CMD_PUSH_FILE = L"adb.exe push %s %s";
+
+const wchar_t* ERROR_INFO_GETIMEI_FAILED = L"Failed to get IMEI code";
+const wchar_t* ERROR_INFO_GETMODEL_FAILED = L"Failed to get Model";
+const wchar_t* ERROR_INFO_GETVERSION_FAILED = L"Failed to get Version";
+const wchar_t* ERROR_INFO_GETMAC_FAILED = L"Failed to get MAC";
+const wchar_t* ERROR_INFO_GETBRAND_FAILED = L"Failed to get Brand";
 
 #define ADB_BUFFER_SIZE		2048
 #define DURATION_WAIT_ADB	(5*1000)
@@ -37,7 +44,7 @@ void CAndroidHelper::NotifyDeviceChanged(DWORD wParam, DWORD lParam)
             if (CheckDeviceDriver(GetDeviceInstanceId(m_hDevInfo, deviceInfo).c_str()))
             {
                 std::string strResult;
-                PostAdbCommand(CMD_GET_IMEI, strResult);
+				PushFile(_T("D:\\workspace\\sohu2\\Lightening_adb\\bin\\Debug\\letvgetkey1"),_T("/sdcard/video"),NULL);
             }
         }
     }
@@ -146,10 +153,7 @@ bool CAndroidHelper::PostAdbCommand(const wchar_t* szCMD, std::string& strResult
 	securityAttributes.lpSecurityDescriptor = NULL;
 	securityAttributes.bInheritHandle = TRUE;
 
-    char recvBuffer[ADB_BUFFER_SIZE] = {0};
-    DWORD recvLen = 0;
-    DWORD occupyLen = 0;
-
+   
     HANDLE hStdoutReadTmp;				// parent stdout read handle
     HANDLE hStdoutWrite, hStderrWrite;	// child stdout write handle
     HANDLE hStdinWriteTmp;				// parent stdin write handle
@@ -217,36 +221,8 @@ bool CAndroidHelper::PostAdbCommand(const wchar_t* szCMD, std::string& strResult
     	CloseHandle(processInfo.hProcess);
     	return false;
     }
-	for (;;)
-	{
-		recvLen = 0;
-		if (!::PeekNamedPipe(hStdoutRead, NULL, 0, NULL,&recvLen, NULL))			// error
-		{
-			break;
-		}
-		if (recvLen > 0)					// not data available
-		{
-			if (!ReadFile(hStdoutRead, recvBuffer, MAX_PATH, &recvLen, NULL))
-			{
-				break;
-			}
-			bResult = true;
-			break;
-		}
-	}
-	if(bResult)
-	{
-		//获取IMEI
-		CStringA strIMEI = recvBuffer;
-		if (strIMEI.Find("error:") == -1)
-		{
-			strIMEI = strIMEI.Mid(strIMEI.FindOneOf("=") + 2);
-			strcpy_s(recvBuffer, ADB_BUFFER_SIZE, strIMEI.GetBuffer());
-			occupyLen = strIMEI.GetLength();
-			strIMEI.ReleaseBuffer();
-			strResult = recvBuffer;
-		}
-	}
+	std::string pipeResult = ReadResponseFromPipe(hStdoutRead);
+	strResult = FilterResult(szCMD,pipeResult);
 
     CloseHandle(hStderrWrite);
     CloseHandle(hStdoutWrite);
@@ -256,4 +232,95 @@ bool CAndroidHelper::PostAdbCommand(const wchar_t* szCMD, std::string& strResult
     CloseHandle(processInfo.hProcess);
     TerminateProcess(processInfo.hProcess, 0);
     return bResult;
+}
+
+bool CAndroidHelper::PushFile( const wchar_t* szSourcefile, const wchar_t* szDest, ProgressCallback callback )
+{
+	std::string strResult;
+	CString strCMD;
+	if(_taccess(szSourcefile,0) == -1)
+	{
+		return false;
+	}
+	strCMD.Format(CMD_PUSH_FILE,szSourcefile,szDest);
+	PostAdbCommand(LPCTSTR(strCMD), strResult);
+	if(!strResult.empty())
+	{
+		return true;
+	}
+	return false;
+}
+
+std::string CAndroidHelper::FilterResult( const wchar_t* szCMD, std::string strResultMsg )
+{
+	std::string strResult;
+	CStringA strBuffer = strResultMsg.c_str();
+	if (strBuffer.Find("error:") == -1)
+	{
+		if(_tcsicmp(szCMD,CMD_GET_IMEI) == 0)
+		{
+			if(strBuffer.Find("Device ID =") >= 0)
+			{
+				//获取IMEI
+				CStringA strIMEI = strBuffer.Mid(strBuffer.Find("Device ID = ") + strlen("Device ID = "));
+				strIMEI.ReleaseBuffer();
+				strResult = (LPCSTR)strIMEI;
+			}
+			else
+			{
+				strResult = W2Utf8(ERROR_INFO_GETIMEI_FAILED);
+			}
+		}
+		else if(_tcsicmp(szCMD,CMD_GET_MODEL) == 0)
+		{
+			strResult = LPCSTR(strBuffer);
+		}
+		else if(_tcsicmp(szCMD,CMD_GET_VERSION) == 0)
+		{
+			strResult = LPCSTR(strBuffer);
+		}
+		else if(_tcsicmp(szCMD,CMD_GET_BRAND) == 0)
+		{
+			strResult = LPCSTR(strBuffer);
+		}
+		else if(_tcsicmp(szCMD,CMD_GET_MAC) == 0)
+		{
+			strResult = LPCSTR(strBuffer);
+		}
+		else
+		{
+			strResult = LPCSTR(strBuffer);
+		}
+	}
+	else
+	{
+		strResult = LPCSTR(strBuffer);
+	}
+	return strResult;
+}
+
+std::string CAndroidHelper::ReadResponseFromPipe( HANDLE hStdOutRead )
+{
+	std::string strResult;
+	char recvBuffer[ADB_BUFFER_SIZE] = {0};
+	DWORD recvLen = 0;
+	DWORD occupyLen = 0;
+
+	for (;;)
+	{
+		recvLen = 0;
+		if (!::PeekNamedPipe(hStdOutRead, NULL, 0, NULL,&recvLen, NULL))			// error
+		{
+			break;
+		}
+		if (recvLen > 0)					// not data available
+		{
+			if (ReadFile(hStdOutRead, recvBuffer, MAX_PATH, &recvLen, NULL))
+			{
+				strResult = recvBuffer;
+			}
+			break;
+		}
+	}
+	return strResult;
 }

@@ -1,6 +1,7 @@
 #pragma once
 #include "Singleton.h"
 #include <SetupAPI.h>
+#include <boost/function.hpp>
 
 extern const wchar_t* CMD_GET_BRAND;
 extern const wchar_t* CMD_GET_MODEL;
@@ -8,6 +9,13 @@ extern const wchar_t* CMD_GET_VERSION;
 extern const wchar_t* CMD_GET_IMEI;
 extern const wchar_t* CMD_GET_MAC;
 
+extern const wchar_t* ERROR_INFO_GETIMEI_FAILED;
+extern const wchar_t* ERROR_INFO_GETMODEL_FAILED;
+extern const wchar_t* ERROR_INFO_GETVERSION_FAILED;
+extern const wchar_t* ERROR_INFO_GETMAC_FAILED;
+extern const wchar_t* ERROR_INFO_GETBRAND_FAILED;
+
+typedef boost::function<void(int)> ProgressCallback;
 class CAndroidHelper:
 	public SohuTool::SingletonImpl<CAndroidHelper>
 {
@@ -34,6 +42,11 @@ public:
 	 *	获取手机相关信息 
 	 */
 	void GetPhoneInfo();
+	
+	/*
+	 *	向手机传送文件
+	 */
+	bool PushFile(const wchar_t* szSourcefile, const wchar_t* szDest, ProgressCallback callback);
 protected:
 
 	/*
@@ -55,6 +68,16 @@ protected:
 	 *	_T("adb -d shell cat /sys/class/net/wlan0/address")	//MAC地址
 	 */
 	bool PostAdbCommand(const wchar_t* szCMD,std::string& strResult);
+
+	/*
+	 *	过滤adb的输出结果
+	 */
+	std::string FilterResult(const wchar_t* szCMD, std::string strResultMsg);
+
+	/*
+	 *	从adb管道读取结果
+	 */
+	std::string ReadResponseFromPipe(HANDLE hStdOutRead);
 private:
 	HDEVINFO			m_hDevInfo;
 };
