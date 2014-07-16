@@ -4,6 +4,7 @@
 #include <Dbt.h>
 #include "Util.h"
 #include <algorithm>
+#include <boost/bind.hpp>
 
 #pragma comment(lib,"setupapi")
 
@@ -30,6 +31,12 @@ CAndroidHelper::CAndroidHelper(void)
 
 CAndroidHelper::~CAndroidHelper(void)
 {
+	m_mapProgressCallback.clear();
+}
+
+void OnProgress(const wchar_t* strSourceFile, int progress)
+{
+	//获取进度的回调
 }
 
 void CAndroidHelper::NotifyDeviceChanged(DWORD wParam, DWORD lParam)
@@ -44,7 +51,7 @@ void CAndroidHelper::NotifyDeviceChanged(DWORD wParam, DWORD lParam)
             if (CheckDeviceDriver(GetDeviceInstanceId(m_hDevInfo, deviceInfo).c_str()))
             {
                 std::string strResult;
-				PushFile(_T("D:\\workspace\\sohu2\\Lightening_adb\\bin\\Debug\\letvgetkey1"),_T("/sdcard/video"),NULL);
+				PushFile(_T("D:\\workspace\\sohu2\\Lightening_adb\\bin\\Debug\\中文11231234"),_T("/sdcard/video"),boost::bind(&OnProgress,_T("D:\\workspace\\sohu2\\Lightening_adb\\bin\\Debug\\中文11231234"),_1));
             }
         }
     }
@@ -215,13 +222,17 @@ bool CAndroidHelper::PostAdbCommand(const wchar_t* szCMD, std::string& strResult
         CloseHandle(hStdinRead);
         return false;
     }
-    if(WAIT_TIMEOUT == WaitForSingleObject(processInfo.hProcess,DURATION_WAIT_ADB))
-    {
-    	TerminateProcess(processInfo.hProcess,0);
-    	CloseHandle(processInfo.hProcess);
-    	return false;
-    }
-	std::string pipeResult = ReadResponseFromPipe(hStdoutRead);
+	//耗时操作不等待进程结束
+    if(!NeedWaitProcess(szCMD))
+	{
+		if(WAIT_TIMEOUT == WaitForSingleObject(processInfo.hProcess,DURATION_WAIT_ADB))
+		{
+			TerminateProcess(processInfo.hProcess,0);
+			CloseHandle(processInfo.hProcess);
+			return false;
+		}
+	}
+	std::string pipeResult = ReadResponseFromPipe(hStdoutRead,szCMD);
 	strResult = FilterResult(szCMD,pipeResult);
 
     CloseHandle(hStderrWrite);
@@ -243,6 +254,11 @@ bool CAndroidHelper::PushFile( const wchar_t* szSourcefile, const wchar_t* szDes
 		return false;
 	}
 	strCMD.Format(CMD_PUSH_FILE,szSourcefile,szDest);
+	if(callback != NULL)
+	{
+		std::wstring cmd = LPCTSTR(strCMD);
+		m_mapProgressCallback.insert(std::make_pair(cmd,callback));
+	}
 	PostAdbCommand(LPCTSTR(strCMD), strResult);
 	if(!strResult.empty())
 	{
@@ -299,7 +315,7 @@ std::string CAndroidHelper::FilterResult( const wchar_t* szCMD, std::string strR
 	return strResult;
 }
 
-std::string CAndroidHelper::ReadResponseFromPipe( HANDLE hStdOutRead )
+std::string CAndroidHelper::ReadResponseFromPipe( HANDLE hStdOutRead, const wchar_t* szCMD )
 {
 	std::string strResult;
 	char recvBuffer[ADB_BUFFER_SIZE] = {0};
@@ -318,9 +334,73 @@ std::string CAndroidHelper::ReadResponseFromPipe( HANDLE hStdOutRead )
 			if (ReadFile(hStdOutRead, recvBuffer, MAX_PATH, &recvLen, NULL))
 			{
 				strResult = recvBuffer;
+				if(!NeedWaitProcess(szCMD))
+				{
+					break;
+				}
+				else
+				{
+					//获取当前百分比
+					CStringA strPartialResult = recvBuffer;
+					int startPos = 0;
+					int lastPos = -1;
+					do 
+					{
+						if(lastPos + 1 < strPartialResult.GetLength())
+						{
+							startPos = strPartialResult.Find("push copying: ",lastPos + 1);
+							if(startPos >= 0)
+							{
+								lastPos = startPos;
+							}
+						}
+						else
+						{
+							break;
+						}
+					} while (startPos >= 0);
+					if(lastPos >= 0)
+					{
+						startPos = lastPos;
+						startPos += strlen("push copying: ");
+						int endPos = strPartialResult.Find("%",startPos);
+						strPartialResult = strPartialResult.Mid(startPos,endPos-startPos);
+						float progress = atof(LPCSTR(strPartialResult));
+						NotifyProgress(progress,szCMD);
+						if(progress >= 100.0)
+						{
+							break;
+						}
+					}
+				}
 			}
-			break;
+			else
+			{
+				break;
+			}
 		}
 	}
 	return strResult;
+}
+
+bool CAndroidHelper::NeedWaitProcess( const wchar_t* szCMD )
+{
+	if(_tcsstr(szCMD,L"push") != NULL)
+	{
+		return true;
+	}
+	return false;
+}
+
+void CAndroidHelper::NotifyProgress( float fPercent, const wchar_t* szCMD )
+{
+	if(!m_mapProgressCallback.empty())
+	{
+		std::wstring strCMD = szCMD;
+		if(m_mapProgressCallback.find(strCMD) != m_mapProgressCallback.end())
+		{
+			ProgressCallback callback = m_mapProgressCallback.find(strCMD)->second;
+			callback(int(fPercent));
+		}
+	}
 }

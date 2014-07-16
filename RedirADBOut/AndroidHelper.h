@@ -2,6 +2,7 @@
 #include "Singleton.h"
 #include <SetupAPI.h>
 #include <boost/function.hpp>
+#include <map>
 
 extern const wchar_t* CMD_GET_BRAND;
 extern const wchar_t* CMD_GET_MODEL;
@@ -77,7 +78,19 @@ protected:
 	/*
 	 *	从adb管道读取结果
 	 */
-	std::string ReadResponseFromPipe(HANDLE hStdOutRead);
+	std::string ReadResponseFromPipe(HANDLE hStdOutRead,const wchar_t* szCMD);
+
+	/*
+	 *	判断是否是耗时操作
+	 */
+	bool NeedWaitProcess(const wchar_t* szCMD);
+
+	/*
+	 *	通知耗时操作执行的百分比
+	 */
+	void NotifyProgress(float fPercent, const wchar_t* szCMD);
+
+	std::map<std::wstring,ProgressCallback>  m_mapProgressCallback;
 private:
 	HDEVINFO			m_hDevInfo;
 };
