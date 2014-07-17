@@ -93,4 +93,5 @@ protected:
 	std::map<std::wstring,ProgressCallback>  m_mapProgressCallback;
 private:
 	HDEVINFO			m_hDevInfo;
+	bool				m_bDeviceConnected;
 };

@@ -27,6 +27,7 @@ const wchar_t* ERROR_INFO_GETBRAND_FAILED = L"Failed to get Brand";
 CAndroidHelper::CAndroidHelper(void)
 {
     m_hDevInfo = NULL;
+	m_bDeviceConnected = false;
 }
 
 CAndroidHelper::~CAndroidHelper(void)
@@ -50,10 +51,17 @@ void CAndroidHelper::NotifyDeviceChanged(DWORD wParam, DWORD lParam)
         {
             if (CheckDeviceDriver(GetDeviceInstanceId(m_hDevInfo, deviceInfo).c_str()))
             {
-                std::string strResult;
-				PushFile(_T("D:\\workspace\\sohu2\\Lightening_adb\\bin\\Debug\\中文11231234"),_T("/sdcard/video"),boost::bind(&OnProgress,_T("D:\\workspace\\sohu2\\Lightening_adb\\bin\\Debug\\中文11231234"),_1));
+				m_bDeviceConnected = true;
+				return;
+               /* std::string strResult;
+				TCHAR szCurPath[MAX_PATH] = {0};
+				GetModuleFileName(NULL,szCurPath,MAX_PATH);
+				std::wstring strSourceFile = szCurPath;
+				strSourceFile += L"\\中文11231234";
+				PushFile(strSourceFile.c_str(),_T("/sdcard"),boost::bind(&OnProgress,strSourceFile.c_str(),_1));*/
             }
         }
+		m_bDeviceConnected = false;
     }
 }
 
@@ -154,6 +162,10 @@ bool CAndroidHelper::CheckDeviceDriver(const wchar_t* szInstanceId)
 
 bool CAndroidHelper::PostAdbCommand(const wchar_t* szCMD, std::string& strResult)
 {
+	if(!m_bDeviceConnected)
+	{
+		return false;
+	}
 	bool bResult = false;
     SECURITY_ATTRIBUTES securityAttributes = {0};
     securityAttributes.nLength = sizeof(SECURITY_ATTRIBUTES);
@@ -247,6 +259,10 @@ bool CAndroidHelper::PostAdbCommand(const wchar_t* szCMD, std::string& strResult
 
 bool CAndroidHelper::PushFile( const wchar_t* szSourcefile, const wchar_t* szDest, ProgressCallback callback )
 {
+	if(m_bDeviceConnected)
+	{
+		return false;
+	}
 	std::string strResult;
 	CString strCMD;
 	if(_taccess(szSourcefile,0) == -1)
