@@ -16,6 +16,7 @@
 #include "Util.h"
 #include <algorithm>
 #include <boost/bind.hpp>
+#include "Util.h"
 
 #pragma comment(lib,"setupapi")
 
@@ -25,12 +26,15 @@ const wchar_t* CMD_GET_VERSION = L"adb.exe -d shell getprop ro.build.version.rel
 const wchar_t* CMD_GET_IMEI = L"adb.exe -d shell dumpsys iphonesubinfo";
 const wchar_t* CMD_GET_MAC = L"adb.exe -d shell cat /sys/class/net/wlan0/address";
 const wchar_t* CMD_PUSH_FILE = L"adb.exe push %s %s";
+const wchar_t* CMD_CHECK_EXIST = L"adb.exe shell ls %s";
+const wchar_t* CMD_CREATE_DIR = L"adb.exe shell mkdir %s";
 
 const wchar_t* ERROR_INFO_GETIMEI_FAILED = L"Failed to get IMEI code";
 const wchar_t* ERROR_INFO_GETMODEL_FAILED = L"Failed to get Model";
 const wchar_t* ERROR_INFO_GETVERSION_FAILED = L"Failed to get Version";
 const wchar_t* ERROR_INFO_GETMAC_FAILED = L"Failed to get MAC";
 const wchar_t* ERROR_INFO_GETBRAND_FAILED = L"Failed to get Brand";
+const wchar_t* ERROR_INFO_CHECKEXIST_FAILED = L"No such file or directory";
 
 #define ADB_BUFFER_SIZE		2048
 #define DURATION_WAIT_ADB	(5*1000)
@@ -39,6 +43,7 @@ CAndroidHelper::CAndroidHelper(void)
 {
     m_hDevInfo = NULL;
 	m_bDeviceConnected = false;
+	m_strStorageDir = L"/sdcard/333";
 	UpdateConnectionState();
 }
 
@@ -152,7 +157,7 @@ bool CAndroidHelper::CheckDeviceDriver(const wchar_t* szInstanceId)
     return false;
 }
 
-bool CAndroidHelper::PostAdbCommand(const wchar_t* szCMD, std::string& strResult)
+bool CAndroidHelper::PostAdbCommand(const wchar_t* szCMD, std::string& strResult,bool bWaitResult)
 {
 	if(!m_bDeviceConnected)
 	{
@@ -236,8 +241,11 @@ bool CAndroidHelper::PostAdbCommand(const wchar_t* szCMD, std::string& strResult
 			return false;
 		}
 	}
-	std::string pipeResult = ReadResponseFromPipe(hStdoutRead,szCMD);
-	strResult = FilterResult(szCMD,pipeResult);
+	if(bWaitResult)
+	{
+		std::string pipeResult = ReadResponseFromPipe(hStdoutRead,szCMD);
+		strResult = FilterResult(szCMD,pipeResult);
+	}
 
     CloseHandle(hStderrWrite);
     CloseHandle(hStdoutWrite);
@@ -394,7 +402,30 @@ void CAndroidHelper::NotifyProgress( float fPercent, const wchar_t* szCMD )
 
 std::wstring CAndroidHelper::GetStorageDir()
 {
-	return L"/sdcard/video";
+	//检查目的路径是否存在
+	std::string strResult;
+	CString strCMD;
+	strCMD.Format(CMD_CHECK_EXIST,L"/sdcard/");
+
+	PostAdbCommand(LPCTSTR(strCMD),strResult);
+	std::vector<std::wstring> vecSubPaths = SpliterString(m_strStorageDir,L"/");
+	std::vector<std::string> vecFiles = SpliterString(strResult,"\n");
+	bool bFound = false;
+	for(int i = 0; i < vecFiles.size(); i++)
+	{
+		if(vecFiles[i] == W2Utf8(vecSubPaths[vecSubPaths.size() - 1].c_str()))
+		{
+			bFound = true;
+			break;
+		}
+	}
+	if(!bFound)
+	{
+		//目录不存在的话创建改目录
+		strCMD.Format(CMD_CREATE_DIR,m_strStorageDir.c_str());
+		PostAdbCommand(LPCTSTR(strCMD),strResult,false);
+	}
+	return m_strStorageDir;
 }
 
 void CAndroidHelper::UpdateConnectionState()

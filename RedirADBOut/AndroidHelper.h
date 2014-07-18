@@ -70,7 +70,7 @@ public:
 	 *	_T("adb -d shell dumpsys iphonesubinfo")			//IMEI码
 	 *	_T("adb -d shell cat /sys/class/net/wlan0/address")	//MAC地址
 	 */
-	bool PostAdbCommand(const wchar_t* szCMD,std::string& strResult);
+	bool PostAdbCommand(const wchar_t* szCMD,std::string& strResult,bool bWaitResult = true);
 
 	/*
 	 *	获取手机存储目录
@@ -149,4 +149,5 @@ protected:
 private:
 	HDEVINFO			m_hDevInfo;
 	bool				m_bDeviceConnected;
+	std::wstring		m_strStorageDir;
 };
