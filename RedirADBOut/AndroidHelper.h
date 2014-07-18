@@ -1,3 +1,14 @@
+/********************************************************************
+	created:	2014/07/18
+	created:	18:7:2014   13:46
+	filename: 	AndroidHelper.h
+	file path:	
+	file base:	AndroidHelper
+	file ext:	h
+	author:		findeway
+	
+	purpose:	
+*********************************************************************/
 #pragma once
 #include "Singleton.h"
 #include <SetupAPI.h>
@@ -17,6 +28,8 @@ extern const wchar_t* ERROR_INFO_GETMAC_FAILED;
 extern const wchar_t* ERROR_INFO_GETBRAND_FAILED;
 
 typedef boost::function<void(int)> ProgressCallback;
+typedef boost::function<void(bool)> ConnectCallback;
+
 class CAndroidHelper:
 	public SohuTool::SingletonImpl<CAndroidHelper>
 {
@@ -48,17 +61,6 @@ public:
 	 *	向手机传送文件
 	 */
 	bool PushFile(const wchar_t* szSourcefile, const wchar_t* szDest, ProgressCallback callback);
-protected:
-
-	/*
-	 *	获取设备相关ID信息
-	 */
-	std::wstring GetDeviceRegisterProperty(HDEVINFO hDevInfo,SP_DEVINFO_DATA deviceInfo,DWORD categoryId);
-
-	/*
-	 *	实例ID是电脑给设备分配的ID便于电脑对I/O设备的管理
-	 */
-	std::wstring GetDeviceInstanceId(HDEVINFO hDevInfo,SP_DEVINFO_DATA deviceInfo);
 
 	/*
 	 *	通过adb操作手机
@@ -71,9 +73,45 @@ protected:
 	bool PostAdbCommand(const wchar_t* szCMD,std::string& strResult);
 
 	/*
+	 *	获取手机存储目录
+	 */
+	std::wstring GetStorageDir();
+	
+	/*
+	 *	注册手机登陆状态变化的回调函数
+	 */
+	int RegisterConnectCallback(ConnectCallback callback);
+
+	/*
+	 *	解注册手机登陆状态变化的回调函数
+	 */
+	bool UnRegisterConnectCallback(int id);
+
+protected:
+
+	/*
+	 *	更新手机连接状态
+	 */
+	void UpdateConnectionState();
+	/*
+	 *	获取设备相关ID信息
+	 */
+	std::wstring GetDeviceRegisterProperty(HDEVINFO hDevInfo,SP_DEVINFO_DATA deviceInfo,DWORD categoryId);
+
+	/*
+	 *	实例ID是电脑给设备分配的ID便于电脑对I/O设备的管理
+	 */
+	std::wstring GetDeviceInstanceId(HDEVINFO hDevInfo,SP_DEVINFO_DATA deviceInfo);
+
+	/*
 	 *	过滤adb的输出结果
 	 */
 	std::string FilterResult(const wchar_t* szCMD, std::string strResultMsg);
+
+	/*
+	 * 过滤掉输出结果中的无用信息，如重启输出等	
+	 */
+	std::string FilterUselessMsg(std::string strResultMsg);
 
 	/*
 	 *	从adb管道读取结果
@@ -90,7 +128,24 @@ protected:
 	 */
 	void NotifyProgress(float fPercent, const wchar_t* szCMD);
 
+	/*
+	 *	通知手机连接状态变化
+	 */
+	void NotifyConnect(bool bConnect);
+
+	//************************************
+	// FullName:  CAndroidHelper::UpdateProgress
+	// Access:    protected 
+	// Returns:   bool
+	// Parameter: const std::string & strMsg
+	// Parameter: const wchar_t * szCMD
+	// Desc:	  获取耗时操作进度 called from ReadResponseFromPipe
+	// Return:	  true-处理完毕 false-未处理完毕
+	//************************************
+	bool UpdateProgress(const std::string& strMsg, const wchar_t* szCMD);
+
 	std::map<std::wstring,ProgressCallback>  m_mapProgressCallback;
+	std::map<int,ConnectCallback>			 m_mapConnectCallback;
 private:
 	HDEVINFO			m_hDevInfo;
 	bool				m_bDeviceConnected;

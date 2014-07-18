@@ -1,3 +1,14 @@
+/********************************************************************
+	created:	2014/07/18
+	created:	18:7:2014   13:46
+	filename: 	AndroidHelper.cpp
+	file path:	
+	file base:	AndroidHelper
+	file ext:	cpp
+	author:		findeway
+	
+	purpose:	
+*********************************************************************/
 #include "StdAfx.h"
 #include "AndroidHelper.h"
 #include <cfgmgr32.h>
@@ -28,16 +39,13 @@ CAndroidHelper::CAndroidHelper(void)
 {
     m_hDevInfo = NULL;
 	m_bDeviceConnected = false;
+	UpdateConnectionState();
 }
 
 CAndroidHelper::~CAndroidHelper(void)
 {
+	m_mapConnectCallback.clear();
 	m_mapProgressCallback.clear();
-}
-
-void OnProgress(const wchar_t* strSourceFile, int progress)
-{
-	//获取进度的回调
 }
 
 void CAndroidHelper::NotifyDeviceChanged(DWORD wParam, DWORD lParam)
@@ -45,23 +53,7 @@ void CAndroidHelper::NotifyDeviceChanged(DWORD wParam, DWORD lParam)
     if (wParam == DBT_DEVNODES_CHANGED || wParam == DBT_DEVICEARRIVAL)
     {
         //有新设备插入，这里有些设备不会触发DBT_DEVICEARRIVAL,所以要使用DBT_DEVNODES_CHANGED
-        SP_DEVINFO_DATA deviceInfo = {0};
-        deviceInfo.cbSize = sizeof(SP_DEVINFO_DATA);
-        if (SearchPhone(&deviceInfo))
-        {
-            if (CheckDeviceDriver(GetDeviceInstanceId(m_hDevInfo, deviceInfo).c_str()))
-            {
-				m_bDeviceConnected = true;
-				return;
-               /* std::string strResult;
-				TCHAR szCurPath[MAX_PATH] = {0};
-				GetModuleFileName(NULL,szCurPath,MAX_PATH);
-				std::wstring strSourceFile = szCurPath;
-				strSourceFile += L"\\中文11231234";
-				PushFile(strSourceFile.c_str(),_T("/sdcard"),boost::bind(&OnProgress,strSourceFile.c_str(),_1));*/
-            }
-        }
-		m_bDeviceConnected = false;
+		UpdateConnectionState();
     }
 }
 
@@ -259,7 +251,7 @@ bool CAndroidHelper::PostAdbCommand(const wchar_t* szCMD, std::string& strResult
 
 bool CAndroidHelper::PushFile( const wchar_t* szSourcefile, const wchar_t* szDest, ProgressCallback callback )
 {
-	if(m_bDeviceConnected)
+	if(!m_bDeviceConnected)
 	{
 		return false;
 	}
@@ -347,46 +339,22 @@ std::string CAndroidHelper::ReadResponseFromPipe( HANDLE hStdOutRead, const wcha
 		}
 		if (recvLen > 0)					// not data available
 		{
+			//清空buffer
+			memset(recvBuffer,0,ADB_BUFFER_SIZE);
 			if (ReadFile(hStdOutRead, recvBuffer, MAX_PATH, &recvLen, NULL))
 			{
-				strResult = recvBuffer;
+				//过滤掉一些无用信息
+				strResult = FilterUselessMsg(recvBuffer);
+				//判断是否是耗时操作，是否等待进程结束
 				if(!NeedWaitProcess(szCMD))
 				{
 					break;
 				}
 				else
 				{
-					//获取当前百分比
-					CStringA strPartialResult = recvBuffer;
-					int startPos = 0;
-					int lastPos = -1;
-					do 
+					if(UpdateProgress(strResult,szCMD))
 					{
-						if(lastPos + 1 < strPartialResult.GetLength())
-						{
-							startPos = strPartialResult.Find("push copying: ",lastPos + 1);
-							if(startPos >= 0)
-							{
-								lastPos = startPos;
-							}
-						}
-						else
-						{
-							break;
-						}
-					} while (startPos >= 0);
-					if(lastPos >= 0)
-					{
-						startPos = lastPos;
-						startPos += strlen("push copying: ");
-						int endPos = strPartialResult.Find("%",startPos);
-						strPartialResult = strPartialResult.Mid(startPos,endPos-startPos);
-						float progress = atof(LPCSTR(strPartialResult));
-						NotifyProgress(progress,szCMD);
-						if(progress >= 100.0)
-						{
-							break;
-						}
+						break;
 					}
 				}
 			}
@@ -416,7 +384,134 @@ void CAndroidHelper::NotifyProgress( float fPercent, const wchar_t* szCMD )
 		if(m_mapProgressCallback.find(strCMD) != m_mapProgressCallback.end())
 		{
 			ProgressCallback callback = m_mapProgressCallback.find(strCMD)->second;
-			callback(int(fPercent));
+			if(callback)
+			{
+				callback(int(fPercent));
+			}
 		}
 	}
+}
+
+std::wstring CAndroidHelper::GetStorageDir()
+{
+	return L"/sdcard/video";
+}
+
+void CAndroidHelper::UpdateConnectionState()
+{
+	SP_DEVINFO_DATA deviceInfo = {0};
+	deviceInfo.cbSize = sizeof(SP_DEVINFO_DATA);
+	if (SearchPhone(&deviceInfo))
+	{
+		if (CheckDeviceDriver(GetDeviceInstanceId(m_hDevInfo, deviceInfo).c_str()))
+		{
+			NotifyConnect(true);
+			return;
+		}
+	}
+	NotifyConnect(false);
+}
+
+std::string CAndroidHelper::FilterUselessMsg( std::string strResultMsg )
+{
+	std::string tags = "adb server is out of date.  killing...\n* daemon started successfully *\n";
+	int npos = strResultMsg.find(tags.c_str());
+	if(npos != std::string::npos)
+	{
+		npos += tags.size(); 
+	}
+	if(npos > 0)
+	{
+		strResultMsg = strResultMsg.substr(npos,strResultMsg.size()-npos);
+	}
+	return strResultMsg;
+}
+
+int CAndroidHelper::RegisterConnectCallback( ConnectCallback callback )
+{
+	int id = m_mapConnectCallback.size();
+	if(callback != NULL)
+	{
+		m_mapConnectCallback.insert(std::make_pair(id,callback));
+	}
+	//防止androidhelper之前初始化过，通知连接状态的时间早于注册回调导致收不到通知
+	UpdateConnectionState();
+	return id;
+}
+
+void CAndroidHelper::NotifyConnect( bool bConnect )
+{
+	m_bDeviceConnected = bConnect;
+	for(std::map<int,ConnectCallback>::iterator iter = m_mapConnectCallback.begin();iter != m_mapConnectCallback.end(); iter++)
+	{
+		if(iter->second)
+		{
+			iter->second(bConnect);
+		}
+	}
+}
+
+bool CAndroidHelper::UnRegisterConnectCallback( int id )
+{
+	if(m_mapConnectCallback.find(id) != m_mapConnectCallback.end())
+	{
+		m_mapConnectCallback.erase(m_mapConnectCallback.find(id));
+		return true;
+	}
+	return false;
+}
+
+bool CAndroidHelper::UpdateProgress( const std::string& strMsg, const wchar_t* szCMD )
+{
+	//获取当前百分比
+	CStringA strPartialResult = strMsg.c_str();
+	int startPos = -1;
+	int lastPos = -1;
+	int recordEndPos = -1;
+	//有时100%会在最后一个buffer中导致读不出来,需要特殊处理
+	if(strPartialResult.Find("100%") >= 0)
+	{
+		NotifyProgress(100.0f,szCMD);
+		return true;
+	}
+	//find last progress record for example: "push copying: 12% has been transfered-"
+	do 
+	{
+		if(lastPos + 1 < strPartialResult.GetLength())
+		{
+			startPos = strPartialResult.Find("push copying: ",lastPos + 1);
+			recordEndPos = strPartialResult.Find("has been transfered -",startPos + 1);
+			//must be a complete record
+			if(startPos >= 0 && recordEndPos < 0)
+			{
+				break;
+			}
+			else if(startPos >= 0)
+			{
+				lastPos = startPos;
+			}
+		}
+		else
+		{
+			break;
+		}
+	} while (startPos >= 0);
+	//extract progress number
+	if(lastPos >= 0)
+	{
+		startPos = lastPos;
+		startPos += strlen("push copying: ");
+		int endPos = strPartialResult.Find("%",startPos);
+		strPartialResult = strPartialResult.Mid(startPos,endPos-startPos);
+		if(!strPartialResult.IsEmpty())
+		{
+			float progress = atof(LPCSTR(strPartialResult));
+			NotifyProgress(progress,szCMD);
+			if(progress >= 100.0)
+			{
+				return true;
+			}
+		}
+	}
+	return false;
 }
