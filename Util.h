@@ -24,7 +24,7 @@ std::string  W2Utf8_win32(LPCWSTR szContent,int size);
 std::string W2Utf8_unix(const wchar_t* wsource);
 std::wstring Utf82W_unix(const char* source);
 
-#ifdef __WIN32
+#ifdef _WIN32
 #define Utf82W Utf82W_win32
 #define W2Utf8 W2Utf8_win32
 #else
