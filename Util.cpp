@@ -10,6 +10,7 @@
 	purpose:	
 *********************************************************************/
 #include "Util.h"
+#include <stdlib.h>
 
 std::vector<std::wstring> SpliterString(const std::wstring& data,const std::wstring& spliter)
 {
