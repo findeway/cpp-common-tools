@@ -1,7 +1,5 @@
 #include "Encoder.h"
 #include "utf8.hpp"
-#include <iconv.h>
-#include <errno.h>
 namespace inner
 {
 	static const std::string base64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ" "abcdefghijklmnopqrstuvwxyz" "0123456789+/";

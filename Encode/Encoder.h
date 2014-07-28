@@ -12,9 +12,6 @@
 #define _ENCODER_H_
 #include <string>
 
-std::string W2Utf8_unix(const wchar_t* wsource);
-std::wstring Utf82W_unix(const char* source);
-
 std::wstring urlencode(const std::wstring& original);
 std::wstring urldecode(const std::wstring& original);
 
