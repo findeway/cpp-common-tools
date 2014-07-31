@@ -76,5 +76,17 @@ protected:
 	std::wstring Utf82W(LPCSTR szContent,int size = -1);
 	std::string W2Utf8(LPCWSTR szContent,int size = -1);
 
+	//************************************
+	// FullName:  CIATHookImpl::ReplaceFunc
+	// Access:    protected 
+	// Returns:   bool
+	// Parameter: PROC replaceFuncEntry
+	// Parameter: PROC originalFuncEntry
+	// Parameter: HMODULE hModule
+	// Parameter: const wchar_t * szTargetModuleName
+	// Desc:	  实现函数地址替换
+	//************************************
+	bool ReplaceFunc(PROC replaceFuncEntry, PROC originalFuncEntry, HMODULE hModule, const wchar_t* szTargetModuleName);
+
     std::map<int, IATHookInfo>							m_hookMap;
 };
