@@ -57,7 +57,7 @@ public:
     // Parameter: int idHook
 	// Desc:
     //************************************
-    bool UnHook(int idHook);
+    bool UnHook(int idHook,bool bDelete);
 
 	//************************************
 	// FullName:  CIATHookImpl::GetModuleByTag
@@ -68,6 +68,14 @@ public:
 	// Desc:	从当前模块中查找带指定标记的模块
 	//************************************
 	void GetModuleByTag(const wchar_t* tag, std::vector<HMODULE>& vModules);
+
+	//************************************
+	// FullName:  CIATHookImpl::CleanupHook
+	// Access:    public 
+	// Returns:   void
+	// Desc:	  清理所有hook
+	//************************************
+	void CleanupHook();
 
 protected:
     //工具函数

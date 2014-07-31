@@ -11,11 +11,7 @@ CIATHookImpl::CIATHookImpl(void)
 
 CIATHookImpl::~CIATHookImpl(void)
 {
-	for (std::map<int, IATHookInfo>::iterator iter = m_hookMap.begin(); iter != m_hookMap.end(); iter++)
-	{
-		UnHook(iter->first);
-	}
-	m_hookMap.clear();
+	CleanupHook();
 }
 
 std::wstring CIATHookImpl::Utf82W(LPCSTR szContent,int size)
@@ -118,14 +114,17 @@ int CIATHookImpl::SetHook(PROC replaceFuncEntry, PROC originalFuncEntry, HMODULE
 	return -1;
 }
 
-bool CIATHookImpl::UnHook(int idHook)
+bool CIATHookImpl::UnHook(int idHook,bool bDelete)
 {
 	if (m_hookMap.find(idHook) != m_hookMap.end())
 	{
 		IATHookInfo hookInfo = m_hookMap.find(idHook)->second;
 		if(ReplaceFunc(hookInfo.originalFuncEntry, hookInfo.replaceFuncEntry, hookInfo.hTargetModule, hookInfo.szTargetModuleName))
 		{
-			m_hookMap.erase(m_hookMap.find(idHook));
+			if(bDelete)
+			{
+				m_hookMap.erase(m_hookMap.find(idHook));
+			}
 		}
 	}
 	return false;
@@ -185,4 +184,14 @@ bool CIATHookImpl::ReplaceFunc( PROC replaceFuncEntry, PROC originalFuncEntry, H
 		pThunk++;
 	}
 	return false;
+}
+
+void CIATHookImpl::CleanupHook()
+{
+	for (std::map<int, IATHookInfo>::iterator iter = m_hookMap.begin(); iter != m_hookMap.end();)
+	{
+		UnHook(iter->first,false);
+		m_hookMap.erase(iter++);
+	}
+	m_hookMap.clear();
 }
