@@ -40,8 +40,8 @@ std::vector<std::string> SpliterString(const std::string& data,const std::string
 	return strs;
 }
 
-
-std::wstring Utf82W_win32(LPCSTR szContent,int size)
+#ifdef _WIN32
+std::wstring Utf82W_win32(const char* szContent,int size)
 {
 	 std::wstring strContent;
 	 int len = MultiByteToWideChar(CP_UTF8,0,szContent,size,NULL,0);
@@ -52,7 +52,7 @@ std::wstring Utf82W_win32(LPCSTR szContent,int size)
 	 return strContent;
 }
 
-std::string  W2Utf8_win32(LPCWSTR szContent,int size)
+std::string  W2Utf8_win32(const wchar_t* szContent,int size)
 {
 	 std::string strContent;
 	 int len = WideCharToMultiByte(CP_UTF8,0,szContent,size,NULL,0,NULL,NULL);
@@ -62,7 +62,7 @@ std::string  W2Utf8_win32(LPCWSTR szContent,int size)
 		 strContent.resize(len-1);
 	 return strContent;
 }
-
+#else
 size_t mbs2wcs(wchar_t *dest, size_t dest_size,const char *src, size_t src_size)
 {
     const char* current_locale= setlocale(LC_ALL, NULL);        // curLocale = "C";
@@ -137,4 +137,4 @@ std::wstring Utf82W_unix(const char* source)
     delete []_Dest;
 	return result;
 }
-
+#endif
